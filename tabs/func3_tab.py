@@ -20,7 +20,11 @@ class Func3Tab(ttk.Frame):
         sidebar_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=5)
         ttk.Label(
             sidebar_frame,
-            text="Alliance Management: Manage alliances, members, and belts.",
+            text="""The Alliance Manager can be used to add member feds and belts to existing alliances.
+            \n\nFirst choose an alliance from the dropdown and click Load. Both members and belts will be shown.
+            \n\nYou can add or remove members by using the buttons below the members table.
+            \n\nTo add a belt, use the respective button below the table. When removing a belt, you can choose to reassign it to a federation. This has to be done, because by default if the AllianceUID is set, the fed uid gets set to 0. So if no fed is assigned, the belt will be in a limbo state between active but not being assigned to any fed in the save.
+            """,
             wraplength=180,
             justify="left"
         ).pack(anchor="n", fill=tk.X, pady=10)

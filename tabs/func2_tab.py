@@ -20,7 +20,11 @@ class Func2Tab(ttk.Frame):
         sidebar_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=5)
         ttk.Label(
             sidebar_frame,
-            text="Func1: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam facilisis.",
+            text="""The Dojo Manager can be used to change the owner of a dojo/school/performance centre." \
+            \n\nFirst load the dojos. Then double-click on the owner field. A dropdown will appear with possible owners.
+            \n\nSchools can have workers as owners, while dojos and PCs are owned by federations.
+            \n\nIf the dropdowns are to messe, search out the id of the worker or fed in the general tab.
+            """,
             wraplength=180,
             justify="left"
         ).pack(anchor="n", fill=tk.X, pady=10)

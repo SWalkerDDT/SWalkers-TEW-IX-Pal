@@ -64,6 +64,23 @@ class MDBApp(tk.Tk):
         control_frame = ttk.Frame(parent)
         control_frame.pack(fill=tk.X, padx=10, pady=5)
 
+        # Sidebar (LEFT for General tab only)
+        sidebar_frame = ttk.Frame(parent)
+        sidebar_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=5)
+        ttk.Label(
+            sidebar_frame,
+            text="""Welcome to the TEW IX Pal by SWalkerDDT.\nThis tool adds functions to edit some parts of TEW IX saves, that aren't easily editable in-game.
+            \n\nFor using this tool, download and install the Microsoft Access Database Engine 2016 Redistributable from Microsoft's website is required.
+            \n\nFirst load a TEW IX save file (MDB or ACCDB) using the 'Load Database File' tab. A backup will be created automatically in the 'backups' folder. There are two possibilities to choose from:
+            \n1) Use a inital TEW9Save.mdb in your save game folder - make sure to not run this save file in TEW IX while using this tool, as it may corrupt the save.
+            \n2) Use the TEW9Save.mdb in the temp/ Folder inside your save - this can be edited while the save is running, but make sure to not advance the current day as it may corrupt the save.
+            \n\nYou can choose to edit the ODBC Driver and/or Password if needed - but usually the defaults should work. In the bottom table you can view the currently selected table, sort by columns or search for specific entries.
+            \n\nFurther instructions for the other tabs can be found in their respective descriptions.
+            """,
+            wraplength=180,
+            #justify="left"
+        ).pack(anchor="n", fill=tk.X, pady=10)
+
         # File picker
         self.path_entry = LabeledEntry(control_frame, "MDB File:")
         self.path_entry.pack(fill=tk.X, expand=True, side=tk.LEFT)

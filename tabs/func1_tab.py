@@ -35,7 +35,18 @@ class Func1Tab(ttk.Frame):
         sidebar_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=5)
         ttk.Label(
             sidebar_frame,
-            text="Func1: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam facilisis.",
+            text="""This tab allows you to generate and book round-robin tournaments.
+            \n\nFirst clear the booking if needed! 
+            \n\n1)  Select a tournament from the dropdown and load its participants.
+            \n\n2)  Match type gets auto-selected based on the tournament type (Single/Tag/Trios). You can choose a different match if needed. 
+            \n\n3)  Participants can be reordered by dragging them in the list. 
+            \n\n4)  Choose a prefix for match names (max 8 characters). 
+            \n\n5)  Click 'Generate Pairings' to create a round-robin schedule. 
+            \n\n6)  Assign shows from the dropdown and match lengths to each match in the schedule. 
+            \n\n7)  Matches can be reordered by dragging them in the schedule list. 
+            \n\n8)  Finally, click 'Book Tournament' to save everything to the database. 
+            \n\n If there are any errors occuring during booking, you can choose to clear the pre-booking first and try again.
+            """,
             wraplength=180,
             justify="left"
         ).pack(anchor="n", fill=tk.X, pady=10)
