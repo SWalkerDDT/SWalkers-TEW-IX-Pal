@@ -2,6 +2,9 @@
 
 A graphical tool for editing and managing TEW IX save files (MDB/ACCDB), including tournament, dojo, and alliance management. Designed for use with the Microsoft Access Database Engine and compatible with both Python and standalone EXE.
 
+## IMPORTANT
+**Always back up your save file beforehand and don't try to rely on the internal backup functionality in this application. This tool is still in development and may not function properly. So use it on your own risk. On the plus side, I've done some Watcher simulations after using this tool. So that is a plus!**
+
 ## Installation & Usage
 
 ### 1. Install Microsoft Access Database Engine (MDB Driver)
