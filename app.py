@@ -11,6 +11,8 @@ from components.components import LabeledEntry
 from tabs.func1_tab import Func1Tab
 from tabs.func2_tab import Func2Tab
 from tabs.func3_tab import Func3Tab
+from tabs.func4_tab import Func4Tab
+from tabs.func5_tab import Func5Tab
 
 class MDBApp(tk.Tk):
     """
@@ -35,9 +37,19 @@ class MDBApp(tk.Tk):
         # Backup path variable
         self.backup_path_var = tk.StringVar()
 
+        # Header control frame (Connect/Eject)
+        self.headercontrol_frame = ttk.Frame(self)
+        self.headercontrol_frame.pack(side=tk.TOP, fill=tk.X, anchor="n")
+        self.connect_btn = ttk.Button(self.headercontrol_frame, text="Connect MDB", command=self.connect_mdb)
+        self.connect_btn.pack(side=tk.LEFT, padx=5, pady=5)
+        self.eject_btn = ttk.Button(self.headercontrol_frame, text="Eject", command=self.eject_file, state="disabled")
+        self.eject_btn.pack(side=tk.LEFT, padx=5, pady=5)
+        self.clear_backups_btn = ttk.Button(self.headercontrol_frame, text="Clear Backups", command=self.clear_backups)
+        self.clear_backups_btn.pack(side=tk.LEFT, padx=5, pady=5)
+
         # Tabs
         self.notebook = ttk.Notebook(self)
-        self.notebook.pack(fill=tk.BOTH, expand=True)
+        self.notebook.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         # General tab
         self.tab_general = ttk.Frame(self.notebook)
@@ -55,6 +67,15 @@ class MDBApp(tk.Tk):
         # Func3 tab
         self.tab_func3 = Func3Tab(self.notebook, self)
         self.notebook.add(self.tab_func3, text="Alliance Manager")
+
+        # Func4 tab
+        self.tab_func4 = Func4Tab(self.notebook, self)
+        self.notebook.add(self.tab_func4, text="Pre Book")
+
+        # Func4 tab
+        #self.tab_func5 = Func5Tab(self.notebook, self)
+        #self.notebook.add(self.tab_func5, text="Alliance Manager")
+
 
     # --- General tab ---
     def build_general_tab(self, parent):
@@ -86,8 +107,6 @@ class MDBApp(tk.Tk):
         self.path_entry.pack(fill=tk.X, expand=True, side=tk.LEFT)
         self.browse_btn = ttk.Button(control_frame, text="Browse", command=self.load_file)
         self.browse_btn.pack(side=tk.LEFT, padx=5)
-        self.eject_btn = ttk.Button(control_frame, text="Eject", command=self.eject_file, state="disabled")
-        self.eject_btn.pack(side=tk.LEFT, padx=5)
 
         # Backup display
         backup_frame = ttk.Frame(parent)
@@ -141,8 +160,6 @@ class MDBApp(tk.Tk):
         self.table_combo = ttk.Combobox(table_frame, state="readonly")
         self.table_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.table_combo.bind("<<ComboboxSelected>>", self.on_table_selected)
-
-        ttk.Button(parent, text="Connect MDB", command=self.connect_mdb).pack(pady=5)
 
         # Treeview
         self.tree = ttk.Treeview(parent)
@@ -218,12 +235,16 @@ class MDBApp(tk.Tk):
             self.browse_btn.config(state="disabled")
             self.eject_btn.config(state="normal")
 
-            # Create backup
-            top_folder = os.path.basename(os.path.dirname(file_path))
+            # Custom backup logic for temp folder
+            folder, filename = os.path.split(file_path)
+            top_folder = os.path.basename(os.path.dirname(folder)) if os.path.basename(folder).lower() == 'temp' else os.path.basename(folder)
             now = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-            backup_dir = os.path.join("backups", top_folder, now)
+            if os.path.basename(folder).lower() == 'temp':
+                backup_dir = os.path.join("backups", top_folder, now, "temp")
+            else:
+                backup_dir = os.path.join("backups", top_folder, now)
             os.makedirs(backup_dir, exist_ok=True)
-            backup_file = os.path.join(backup_dir, os.path.basename(file_path))
+            backup_file = os.path.join(backup_dir, filename)
             shutil.copy2(file_path, backup_file)
             self.backup_path_var.set(backup_file)
 
@@ -267,6 +288,9 @@ class MDBApp(tk.Tk):
             self.tab_func3.belt_tree.delete(*self.tab_func3.belt_tree.get_children())
             self.tab_func3.alliance_combo.set("")
 
+        self.connect_btn.config(state="normal")
+        self.eject_btn.config(state="disabled")
+
     def connect_mdb(self):
         """
         Connect to the selected MDB file using the provided driver and password.
@@ -299,6 +323,16 @@ class MDBApp(tk.Tk):
             # Also provide connection to Func3 tab and reload alliances
             self.tab_func3.reload_alliances(self.conn)
 
+            # Also update Func4 tab
+            if hasattr(self, "tab_func4"):
+                self.tab_func4.conn = self.conn
+                self.tab_func4.refresh_tab()
+            #if hasattr(self, "tab_func5"):
+            #    self.tab_func5.conn = self.conn
+            #    self.tab_func5.refresh()
+            # Disable connect, enable eject
+            self.connect_btn.config(state="disabled")
+            self.eject_btn.config(state="normal")
         except Exception as e:
             messagebox.showerror("Error", f"Could not connect:\n{e}")
 
@@ -382,6 +416,17 @@ class MDBApp(tk.Tk):
         entry.bind("<Return>", save_edit)
         entry.bind("<FocusOut>", lambda e: entry.destroy())
 
+    def clear_backups(self):
+        """
+        Clear the backups folder after confirmation.
+        """
+        if messagebox.askyesno("Are you sure?", "Are you sure you want to delete all backups?"):
+            backup_dir = os.path.join(os.getcwd(), "backups")
+            if os.path.exists(backup_dir):
+                shutil.rmtree(backup_dir)
+                messagebox.showinfo("Backups Deleted", "All backups have been deleted.")
+            else:
+                messagebox.showinfo("No Backups", "No backups folder found.")
 
 if __name__ == "__main__":
     app = MDBApp()
