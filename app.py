@@ -13,6 +13,7 @@ from tabs.func2_tab import Func2Tab
 from tabs.func3_tab import Func3Tab
 from tabs.func4_tab import Func4Tab
 from tabs.func5_tab import Func5Tab
+from tabs.func6_tab import Func6Tab
 
 class MDBApp(tk.Tk):
     """
@@ -72,10 +73,13 @@ class MDBApp(tk.Tk):
         self.tab_func4 = Func4Tab(self.notebook, self)
         self.notebook.add(self.tab_func4, text="Pre Book")
 
-        # Func4 tab
-        #self.tab_func5 = Func5Tab(self.notebook, self)
-        #self.notebook.add(self.tab_func5, text="Alliance Manager")
+        # Func5 tab
+        self.tab_func5 = Func5Tab(self.notebook, self)
+        self.notebook.add(self.tab_func5, text="Alliance Manager")
 
+        # Func6 tab
+        self.tab_func6 = Func6Tab(self.notebook, self)
+        self.notebook.add(self.tab_func6, text="Alliance Manager")
 
     # --- General tab ---
     def build_general_tab(self, parent):
@@ -85,7 +89,6 @@ class MDBApp(tk.Tk):
         control_frame = ttk.Frame(parent)
         control_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        # Sidebar (LEFT for General tab only)
         sidebar_frame = ttk.Frame(parent)
         sidebar_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=5)
         ttk.Label(
@@ -99,11 +102,11 @@ class MDBApp(tk.Tk):
             \n\nFurther instructions for the other tabs can be found in their respective descriptions.
             """,
             wraplength=180,
-            #justify="left"
         ).pack(anchor="n", fill=tk.X, pady=10)
 
         # File picker
         self.path_entry = LabeledEntry(control_frame, "MDB File:")
+        self.path_entry.set("D:/TEW 2024/Databases/2018-RINGKAMPF/SaveGames/RK18_0/temp/TEW9Save.mdb")
         self.path_entry.pack(fill=tk.X, expand=True, side=tk.LEFT)
         self.browse_btn = ttk.Button(control_frame, text="Browse", command=self.load_file)
         self.browse_btn.pack(side=tk.LEFT, padx=5)
@@ -161,10 +164,16 @@ class MDBApp(tk.Tk):
         self.table_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.table_combo.bind("<<ComboboxSelected>>", self.on_table_selected)
 
-        # Treeview
-        self.tree = ttk.Treeview(parent)
-        self.tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        #self.tree.bind("<Double-1>", self.on_double_click)
+        # Treeview with horizontal and vertical scrollbars
+        tree_frame = ttk.Frame(parent)
+        tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.tree = ttk.Treeview(tree_frame, show='headings')
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.tree_scroll_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.tree.xview)
+        self.tree_scroll_x.pack(side=tk.BOTTOM, fill=tk.X)
+        self.tree_scroll_y = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
+        self.tree_scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tree.configure(xscrollcommand=self.tree_scroll_x.set, yscrollcommand=self.tree_scroll_y.set)
 
         # Search bar
         search_frame = ttk.Frame(parent)
@@ -175,6 +184,19 @@ class MDBApp(tk.Tk):
         search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
         ttk.Button(search_frame, text="Go", command=self.apply_search).pack(side=tk.LEFT, padx=5)
         ttk.Button(search_frame, text="Clear", command=self.clear_search).pack(side=tk.LEFT, padx=5)
+
+        # Editable checkbox
+        self.editable_var = tk.BooleanVar(value=False)
+        def on_editable_toggle():
+            if self.editable_var.get():
+                if messagebox.askyesno("Are you sure?", "Are you sure?"):
+                    self.tree.bind("<Double-1>", self.on_double_click)
+                else:
+                    self.editable_var.set(False)
+            else:
+                self.tree.unbind("<Double-1>")
+        editable_check = ttk.Checkbutton(control_frame, text="Editable", variable=self.editable_var, command=on_editable_toggle)
+        editable_check.pack(side=tk.LEFT, padx=5)
 
     def apply_search(self):
         """
@@ -261,7 +283,6 @@ class MDBApp(tk.Tk):
             self.conn = None
 
         # Clear all fields and trees
-        self.path_entry.set("")
         self.path_entry.entry.config(state="normal")
         self.browse_btn.config(state="normal")
         self.eject_btn.config(state="disabled")
@@ -316,21 +337,21 @@ class MDBApp(tk.Tk):
             self.current_table = self.tables[0]
             self.load_table(self.current_table)
 
-            # Also provide connection to Func1 tab
             self.tab_func1.conn = self.conn
             self.tab_func1.load_tournaments()
 
-            # Also provide connection to Func3 tab and reload alliances
             self.tab_func3.reload_alliances(self.conn)
 
-            # Also update Func4 tab
             if hasattr(self, "tab_func4"):
                 self.tab_func4.conn = self.conn
                 self.tab_func4.refresh_tab()
-            #if hasattr(self, "tab_func5"):
-            #    self.tab_func5.conn = self.conn
-            #    self.tab_func5.refresh()
-            # Disable connect, enable eject
+            if hasattr(self, "tab_func5"):
+                self.tab_func5.conn = self.conn
+                self.tab_func5.refresh()
+            if hasattr(self, "tab_func6"):
+                self.tab_func6.conn = self.conn
+                self.tab_func6.refresh()
+
             self.connect_btn.config(state="disabled")
             self.eject_btn.config(state="normal")
         except Exception as e:
@@ -351,7 +372,7 @@ class MDBApp(tk.Tk):
         """
         try:
             self.df = pd.read_sql(f"SELECT * FROM [{table}]", self.conn)
-            self.pk_col = self.df.columns[0]  # assume first col is PK
+            self.pk_col = self.df.columns[0] 
             self.populate_tree()
         except Exception as e:
             messagebox.showerror("Error", f"Could not load table {table}:\n{e}")
@@ -365,18 +386,20 @@ class MDBApp(tk.Tk):
         self.tree["show"] = "headings"
         for col in self.df.columns:
             self.tree.heading(col, text=col, command=lambda c=col: self.sort_by_column(c, False))
-            self.tree.column(col, width=120)
+            self.tree.column(col, width=220)  
         for _, row in self.df.iterrows():
             self.tree.insert("", tk.END, values=list(row))
+        if hasattr(self, 'editable_var') and self.editable_var.get():
+            self.tree.bind("<Double-1>", self.on_double_click)
+        else:
+            self.tree.unbind("<Double-1>")
 
     def sort_by_column(self, col, reverse):
         """
         Sort the DataFrame by the given column and update the treeview.
         """
-        # Sort DataFrame and update tree
         self.df.sort_values(by=col, ascending=not reverse, inplace=True, kind='mergesort')
         self.populate_tree()
-        # Reverse sort next time
         self.tree.heading(col, command=lambda: self.sort_by_column(col, not reverse))
 
     def on_double_click(self, event):
@@ -427,6 +450,53 @@ class MDBApp(tk.Tk):
                 messagebox.showinfo("Backups Deleted", "All backups have been deleted.")
             else:
                 messagebox.showinfo("No Backups", "No backups folder found.")
+
+    def reload_mdb(self):
+        """
+        Disconnects the current MDB connection and reconnects to the file in the path_entry field.
+        """
+        # Close current connection if open
+        if self.conn:
+            try:
+                self.conn.close()
+            except Exception:
+                pass
+            self.conn = None
+        # Reconnect using the current path_entry
+        db_file = self.path_entry.get()
+        driver = self.driver_entry.get()
+        password = self.password_entry.get()
+        if not db_file:
+            messagebox.showwarning("No file", "Select an MDB file first.")
+            return
+        try:
+            conn_str = f'DRIVER={driver};DBQ={db_file};UID={""};PWD={password};'
+            self.conn = pyodbc.connect(conn_str)
+            cursor = self.conn.cursor()
+            self.tables = [row.table_name for row in cursor.tables(tableType="TABLE")]
+            if not self.tables:
+                messagebox.showinfo("No tables", "No tables found in MDB.")
+                return
+            self.table_combo["values"] = self.tables
+            self.table_combo.current(0)
+            self.current_table = self.tables[0]
+            self.load_table(self.current_table)
+            self.tab_func1.conn = self.conn
+            self.tab_func1.load_tournaments()
+            self.tab_func3.reload_alliances(self.conn)
+            if hasattr(self, "tab_func4"):
+                self.tab_func4.conn = self.conn
+                self.tab_func4.refresh_tab()
+            if hasattr(self, "tab_func5"):
+                self.tab_func5.conn = self.conn
+                self.tab_func5.refresh()
+            if hasattr(self, "tab_func6"):
+                self.tab_func6.conn = self.conn
+                self.tab_func6.refresh()
+            self.connect_btn.config(state="disabled")
+            self.eject_btn.config(state="normal")
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not reconnect:\n{e}")
 
 if __name__ == "__main__":
     app = MDBApp()

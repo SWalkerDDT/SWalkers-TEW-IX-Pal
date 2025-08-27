@@ -104,16 +104,15 @@ class Func1Tab(ttk.Frame):
             self.combined_tree.heading(col, text=col)
         self.combined_tree.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         self.enable_drag_and_drop(self.combined_tree)
-        self._tree_widgets = {}  # item_id -> (combo, spin)
-        self.combined_tree.bind("<Configure>", self._on_tree_scroll)
-        self.combined_tree.bind("<Motion>", self._on_tree_scroll)
-        self.combined_tree.bind("<Button-1>", self._on_tree_scroll)
 
         # --- Step 6: Generate pairings button ---
         ttk.Button(self, text="Generate Pairings", command=self.generate_pairings).pack(pady=5)
 
         # --- Step 7: Book tournament button ---
         ttk.Button(self, text="Book Tournament", command=self.on_book_tournament).pack(pady=10)
+
+        # Enable double-click editing for the Show column
+        self.combined_tree.bind('<Double-1>', self.on_combined_tree_double_click)
 
     # ---------------- Methods ----------------
 
@@ -146,7 +145,6 @@ class Func1Tab(ttk.Frame):
         # Destroy all child widgets in combined_tree (e.g., dropdowns, spinboxes)
         for child in self.combined_tree.winfo_children():
             child.destroy()
-        self._tree_widgets.clear()
         # Clear trees on new tournament load
         self.participant_tree.delete(*self.participant_tree.get_children())
         self.combined_tree.delete(*self.combined_tree.get_children())
@@ -236,7 +234,6 @@ class Func1Tab(ttk.Frame):
             self.schedule = generate_round_robin_tournament([json.loads(tag) for tag, _ in items])
         # Clear combined tree and widgets
         self.combined_tree.delete(*self.combined_tree.get_children())
-        self._tree_widgets.clear()
         # Insert matches
         for day, matches in enumerate(self.schedule, start=1):
             for m in matches:
@@ -245,44 +242,16 @@ class Func1Tab(ttk.Frame):
                 if self.tournament_type == 1:
                     match_str = f"{id_to_name[m[0]]} vs {id_to_name[m[1]]}"
                 else:
-                    team_names = ["|".join(id_to_name[pid] for pid in team) for team in m]
-                    match_str = f"{team_names[0]} vs {team_names[1]}"
+                    # m is a tuple/list of two teams, each a list of pids
+                    def team_name(team):
+                        # If team is a list, join names, else just get name
+                        if isinstance(team, (list, tuple)):
+                            return "|".join(query_worker_name_by_id(self.conn, pid) for pid in team)
+                        else:
+                            return query_worker_name_by_id(self.conn, team)
+                    match_str = f"{team_name(m[0])} vs {team_name(m[1])}"
                 tag_value = json.dumps(m)
-                item_id = self.combined_tree.insert("", tk.END, values=(day, match_str, "", 10), tags=(tag_value,))
-                self.add_show_and_length_widgets(item_id)
-
-    def add_show_and_length_widgets(self, item_id):
-        """
-        Add widgets for selecting show and match length for each scheduled match.
-        """
-        def place_widgets():
-            bbox_show = self.combined_tree.bbox(item_id, column="Show")
-            bbox_length = self.combined_tree.bbox(item_id, column="Length")
-            if not bbox_show or not bbox_length:
-                self.combined_tree.after(50, place_widgets)
-                return
-            combo = ttk.Combobox(self.combined_tree, values=list(self.shows.values()), state="readonly")
-            combo.place(x=bbox_show[0], y=bbox_show[1], width=bbox_show[2], height=bbox_show[3])
-            combo.bind("<<ComboboxSelected>>", lambda e: self.combined_tree.set(item_id, "Show", combo.get()))
-            spin = tk.Spinbox(self.combined_tree, from_=1, to=300, width=5)
-            spin.place(x=bbox_length[0], y=bbox_length[1], width=bbox_length[2], height=bbox_length[3])
-            spin.bind("<FocusOut>", lambda e: self.combined_tree.set(item_id, "Length", spin.get()))
-            self._tree_widgets[item_id] = (combo, spin)
-        self.combined_tree.after(50, place_widgets)
-
-    def _on_tree_scroll(self, event=None):
-        # Reposition widgets for visible items
-        for item_id, (combo, spin) in self._tree_widgets.items():
-            bbox_show = self.combined_tree.bbox(item_id, column="Show")
-            bbox_length = self.combined_tree.bbox(item_id, column="Length")
-            if bbox_show:
-                combo.place(x=bbox_show[0], y=bbox_show[1], width=bbox_show[2], height=bbox_show[3])
-            else:
-                combo.place_forget()
-            if bbox_length:
-                spin.place(x=bbox_length[0], y=bbox_length[1], width=bbox_length[2], height=bbox_length[3])
-            else:
-                spin.place_forget()
+                self.combined_tree.insert("", tk.END, values=(day, match_str, "", 10), tags=(tag_value,))
 
     # ---------------- Book Tournament ----------------
     def on_book_tournament(self):
@@ -309,13 +278,16 @@ class Func1Tab(ttk.Frame):
             messagebox.showerror("Error", "Please set a valid match length for each match!")
             return
 
-        # Map show names to IDs
+        # Map show names to IDs for each match (allow multiple shows per day)
         show_order = []
-        for sname in show_names:
-            for sid, name in self.shows.items():
+        for r in rows:
+            sname = r[2]
+            sid = None
+            for k, name in self.shows.items():
                 if name == sname:
-                    show_order.append(sid)
+                    sid = k
                     break
+            show_order.append(sid)
 
         # Build schedule and match lengths dict
         sched_dict = {}
@@ -354,7 +326,7 @@ class Func1Tab(ttk.Frame):
         if match_uid is None:
             messagebox.showerror("Error", "Please select a match!")
             return
-
+        print(show_order)
         # Call backend
         backend_book_tournament(
             self.conn,
@@ -386,7 +358,7 @@ class Func1Tab(ttk.Frame):
 
     def open_show_day_popup(self):
         """
-        Open a popup dialog to assign a show to a specific day or a range of days.
+        Open a popup dialog to assign a show to a specific day or a range of days, or assign shows to all days at once.
         """
         if not self.schedule or not self.shows:
             messagebox.showinfo("Info", "Generate pairings and load shows first.")
@@ -394,18 +366,29 @@ class Func1Tab(ttk.Frame):
         days = list(range(1, len(self.schedule) + 1))
         dialog = tk.Toplevel(self)
         dialog.title("Assign Show to Day(s)")
-        dialog.geometry("480x210")
-        ttk.Label(dialog, text="Select Day or Range (e.g. 1 or 1-9):").pack(pady=5)
+        dialog.geometry("520x320")
+        notebook = ttk.Notebook(dialog)
+        notebook.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+        # --- Tab 1: Range ---
+        tab1 = ttk.Frame(notebook)
+        notebook.add(tab1, text="Assign to Range")
+        ttk.Label(tab1, text="Select Day or Range (e.g. 1 or 1-9):").pack(pady=5)
         day_var = tk.StringVar(value=str(days[0]))
-        day_entry = ttk.Entry(dialog, textvariable=day_var, width=12)
+        day_entry = ttk.Entry(tab1, textvariable=day_var, width=12)
         day_entry.pack(pady=2)
-        ttk.Label(dialog, text="Select Show:").pack(pady=5)
+        ttk.Label(tab1, text="Select Show:").pack(pady=5)
         show_var = tk.StringVar()
-        show_combo = ttk.Combobox(dialog, values=list(self.shows.values()), textvariable=show_var, state="readonly")
+        show_combo = ttk.Combobox(tab1, values=list(self.shows.values()), textvariable=show_var, state="normal", width=40)
         show_combo.pack(pady=2)
-        btn_frame = ttk.Frame(dialog)
-        btn_frame.pack(pady=8)
-        def apply():
+        show_combo['postcommand'] = lambda: show_combo.configure(values=[v for v in self.shows.values() if show_var.get().lower() in v.lower()])
+        def on_show_keyrelease(event):
+            val = show_var.get().lower()
+            filtered = [v for v in self.shows.values() if val in v.lower()]
+            show_combo['values'] = filtered
+        show_combo.bind('<KeyRelease>', on_show_keyrelease)
+        btn_frame1 = ttk.Frame(tab1)
+        btn_frame1.pack(pady=8)
+        def apply_tab1():
             day_text = day_var.get().strip()
             show = show_combo.get()
             if not show:
@@ -431,15 +414,38 @@ class Func1Tab(ttk.Frame):
                 vals = self.combined_tree.item(item_id, "values")
                 if int(vals[0]) in day_list:
                     self.combined_tree.set(item_id, "Show", show)
-                    if item_id in self._tree_widgets:
-                        self._tree_widgets[item_id][0].set(show)
             dialog.destroy()
-        ttk.Button(btn_frame, text="Apply", command=apply).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame1, text="Apply", command=apply_tab1).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame1, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        # --- Tab 2: All Days ---
+        tab2 = ttk.Frame(notebook)
+        notebook.add(tab2, text="Assign to All Days")
+        day_show_vars = {}
+        for day in days:
+            row = ttk.Frame(tab2)
+            row.pack(fill=tk.X, pady=2, padx=8)
+            ttk.Label(row, text=f"Day {day}", width=8).pack(side=tk.LEFT)
+            show_var = tk.StringVar()
+            show_combo = ttk.Combobox(row, values=list(self.shows.values()), textvariable=show_var, state="normal", width=40)
+            show_combo.pack(side=tk.LEFT, padx=2)
+            day_show_vars[day] = show_var
+        btn_frame2 = ttk.Frame(tab2)
+        btn_frame2.pack(pady=8)
+        def apply_tab2():
+            # For each day, set the show for all matches on that day
+            for item_id in self.combined_tree.get_children():
+                vals = self.combined_tree.item(item_id, "values")
+                day = int(vals[0])
+                show = day_show_vars[day].get()
+                if show:
+                    self.combined_tree.set(item_id, "Show", show)
+            dialog.destroy()
+        ttk.Button(btn_frame2, text="Apply", command=apply_tab2).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame2, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
 
     def set_all_lengths(self):
         """
-        Set the length for all matches in the combined_tree and update spinboxes if present.
+        Set the length for all matches in the combined_tree.
         """
         val = self.all_length_var.get()
         try:
@@ -451,6 +457,30 @@ class Func1Tab(ttk.Frame):
             return
         for item_id in self.combined_tree.get_children():
             self.combined_tree.set(item_id, "Length", length)
-            if item_id in self._tree_widgets:
-                self._tree_widgets[item_id][1].delete(0, tk.END)
-                self._tree_widgets[item_id][1].insert(0, str(length))
+
+    def on_combined_tree_double_click(self, event):
+        """
+        Allow editing the Show column in the combined_tree via a Combobox on double-click.
+        """
+        region = self.combined_tree.identify('region', event.x, event.y)
+        if region != 'cell':
+            return
+        col = self.combined_tree.identify_column(event.x)
+        col_index = int(col.replace('#', '')) - 1
+        if self.combined_tree['columns'][col_index] != 'Show':
+            return
+        row_id = self.combined_tree.identify_row(event.y)
+        if not row_id:
+            return
+        x, y, width, height = self.combined_tree.bbox(row_id, col)
+        current_value = self.combined_tree.set(row_id, 'Show')
+        combo = ttk.Combobox(self.combined_tree, values=list(self.shows.values()), state='readonly')
+        combo.place(x=x, y=y, width=width, height=height)
+        combo.set(current_value)
+        combo.focus()
+        def on_select(event=None):
+            self.combined_tree.set(row_id, 'Show', combo.get())
+            combo.destroy()
+        combo.bind('<<ComboboxSelected>>', on_select)
+        combo.bind('<FocusOut>', lambda e: combo.destroy())
+        combo.bind('<Return>', on_select)

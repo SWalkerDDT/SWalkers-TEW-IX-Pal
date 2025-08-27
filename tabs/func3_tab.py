@@ -80,13 +80,21 @@ class Func3Tab(ttk.Frame):
 
     def load_alliances(self):
         """
-        Load all alliances from the database and populate the dropdown.
+        Load all alliances from the database and populate the dropdown, showing if they are active or not.
         """
         cursor = self.conn.cursor()
-        cursor.execute("SELECT UID, Name FROM tblUmbrella")
+        cursor.execute("SELECT UID, Name, Active FROM tblUmbrella")
         self.alliances = {row.UID: row.Name for row in cursor.fetchall()}
-        self.alliance_combo["values"] = list(self.alliances.values())
-        if self.alliances:
+        cursor.execute("SELECT UID, Name, Active FROM tblUmbrella")
+        alliance_display = []
+        self.alliance_uid_map = {}
+        for row in cursor.fetchall():
+            status = "Active" if row.Active else "Inactive"
+            display = f"{row.Name} ({status})"
+            alliance_display.append(display)
+            self.alliance_uid_map[display] = row.UID
+        self.alliance_combo["values"] = alliance_display
+        if alliance_display:
             self.alliance_combo.current(0)
             self.load_alliance()
 
@@ -95,13 +103,10 @@ class Func3Tab(ttk.Frame):
         Get the UID of the currently selected alliance from the dropdown.
         Returns None if not found.
         """
-        if not hasattr(self, "alliances") or not self.alliance_combo.get():
+        if not hasattr(self, "alliance_uid_map") or not self.alliance_combo.get():
             return None
-        name = self.alliance_combo.get()
-        for uid, n in self.alliances.items():
-            if n == name:
-                return uid
-        return None
+        display = self.alliance_combo.get()
+        return self.alliance_uid_map.get(display)
 
     def load_alliance(self):
         """
@@ -112,7 +117,6 @@ class Func3Tab(ttk.Frame):
             return
 
         cursor = self.conn.cursor()
-        # Members (with table aliases)
         cursor.execute("""
             SELECT m.UID, f.Name, m.Permanent, m.Active
             FROM tblUmbrellaMember AS m
@@ -123,7 +127,6 @@ class Func3Tab(ttk.Frame):
         for row in cursor.fetchall():
             self.member_tree.insert("", tk.END, values=tuple(row))
 
-        # Belts (with table aliases)
         cursor.execute("""
             SELECT b.UID, b.Name, f.Name
             FROM tblBelt AS b
@@ -142,7 +145,6 @@ class Func3Tab(ttk.Frame):
         if not uid:
             return
         cursor = self.conn.cursor()
-        # No table aliases
         cursor.execute("""
             SELECT UID, Name FROM tblFed
             WHERE UID NOT IN (
@@ -156,9 +158,16 @@ class Func3Tab(ttk.Frame):
 
         dialog = tk.Toplevel(self)
         dialog.title("Add Member")
+        dialog.geometry("420x180")
         ttk.Label(dialog, text="Select Federation:").pack(padx=10, pady=5)
-        fed_combo = ttk.Combobox(dialog, values=[f"{row.UID}: {row.Name}" for row in options], state="readonly")
+        fed_var = tk.StringVar()
+        fed_combo = ttk.Combobox(dialog, values=[f"{row.UID}: {row.Name}" for row in options], state="normal", width=40, textvariable=fed_var)
         fed_combo.pack(padx=10, pady=5)
+        def on_fed_keyrelease(event):
+            val = fed_var.get().lower()
+            filtered = [f"{row.UID}: {row.Name}" for row in options if val in row.Name.lower() or val in str(row.UID)]
+            fed_combo['values'] = filtered
+        fed_combo.bind('<KeyRelease>', on_fed_keyrelease)
         perm_var = tk.BooleanVar()
         act_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(dialog, text="Permanent", variable=perm_var).pack(padx=10, pady=2)
@@ -168,7 +177,6 @@ class Func3Tab(ttk.Frame):
             if not val:
                 return
             fed_uid = int(val.split(":")[0])
-            # Get the next UID
             cursor.execute("SELECT MAX(UID) FROM tblUmbrellaMember")
             max_uid = cursor.fetchone()[0]
             next_uid = (max_uid + 1) if max_uid is not None else 1
@@ -210,7 +218,7 @@ class Func3Tab(ttk.Frame):
             return
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT b.UID, b.Name, f.Name
+            SELECT b.UID, b.Name, f.Initials
             FROM tblBelt AS b
             LEFT JOIN tblFed AS f ON b.Fed = f.UID
             WHERE b.AllianceUID IS NULL OR b.AllianceUID <> ?
@@ -222,9 +230,16 @@ class Func3Tab(ttk.Frame):
 
         dialog = tk.Toplevel(self)
         dialog.title("Add Belt")
+        dialog.geometry("420x180")
         ttk.Label(dialog, text="Select Belt:").pack(padx=10, pady=5)
-        belt_combo = ttk.Combobox(dialog, values=[f"{row.UID}: {row.Name} ({row[2]})" for row in options], state="readonly")
+        belt_var = tk.StringVar()
+        belt_combo = ttk.Combobox(dialog, values=[f"{row.UID}: {row.Name} [{row[2]}]" if row[2] else f"{row.UID}: {row.Name}" for row in options], state="normal", width=40, textvariable=belt_var)
         belt_combo.pack(padx=10, pady=5)
+        def on_belt_keyrelease(event):
+            val = belt_var.get().lower()
+            filtered = [f"{row.UID}: {row.Name} [{row[2]}]" if row[2] else f"{row.UID}: {row.Name}" for row in options if val in row.Name.lower() or val in str(row.UID) or (row[2] and val in row[2].lower())]
+            belt_combo['values'] = filtered
+        belt_combo.bind('<KeyRelease>', on_belt_keyrelease)
         def add():
             val = belt_combo.get()
             if not val:
@@ -250,9 +265,7 @@ class Func3Tab(ttk.Frame):
         belt_uid = self.belt_tree.item(sel[0], "values")[0]
         cursor = self.conn.cursor()
 
-        # Ask if user wants to reassign the belt to a federation
         if messagebox.askyesno("Reassign Belt", "Do you want to reassign this belt to a federation?"):
-            # Show dialog with federation dropdown
             dialog = tk.Toplevel(self)
             dialog.title("Select Federation")
             ttk.Label(dialog, text="Select Federation:").pack(padx=10, pady=5)
@@ -278,7 +291,6 @@ class Func3Tab(ttk.Frame):
             ttk.Button(dialog, text="Assign", command=assign_and_remove).pack(pady=5)
             ttk.Button(dialog, text="Cancel", command=lambda: [dialog.destroy(), self.load_alliance()]).pack(pady=2)
         else:
-            # Just remove from alliance, set AllianceUID to 0.0
             cursor.execute(
                 "UPDATE tblBelt SET AllianceUID = 0.0 WHERE UID = ?",
                 (belt_uid,)

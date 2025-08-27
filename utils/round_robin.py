@@ -170,9 +170,10 @@ def add_data_to_tblPreBookingNote(conn, cursor, userbooking_uid, fed_uid):
     cursor.execute(query, values)
     conn.commit()
 
-def book_tournament_day(conn, prefix, day, show, match_list, tournament_type, fed_id, match_length_list, match_uid):
+def book_tournament_day(conn, prefix, day, show_list, match_list, tournament_type, fed_id, match_length_list, match_uid):
     """
     Book all matches for a single day of a tournament.
+    show_list: list of show IDs for each match on this day
     match_uid: UID from tblMatch selected in GUI
     match_list: list of matches (singles/teams)
     match_length_list: list of match lengths per match
@@ -186,10 +187,8 @@ def book_tournament_day(conn, prefix, day, show, match_list, tournament_type, fe
         else:
             team_names = ["|".join(query_worker_name_by_id(conn, pid) for pid in team) for team in match]
             booking_name = f"{prefix}: {team_names[0]} vs {team_names[1]}"
-
-        card_uid = {1: 1, 2: 391, 3: 498}[tournament_type]
-        add_data_to_tblPreBooking(conn, cursor, last_prebooking_id, booking_name, fed_id, show, match_uid, match_length, match_uid)
-
+        card_uid = show_list[idx]
+        add_data_to_tblPreBooking(conn, cursor, last_prebooking_id, booking_name, fed_id, card_uid, match_uid, match_length, match_uid)
         if tournament_type == 1:
             for pos, pid in enumerate(match):
                 add_data_to_tblPreBookingInvolved(conn, cursor, last_prebooking_id, fed_id, pos+1, pid)
@@ -199,7 +198,6 @@ def book_tournament_day(conn, prefix, day, show, match_list, tournament_type, fe
                 for pid in team:
                     add_data_to_tblPreBookingInvolved(conn, cursor, last_prebooking_id, fed_id, pos, pid)
                     pos += 1
-
         add_data_to_tblPreBookingNote(conn, cursor, last_prebooking_id, fed_id)
         last_prebooking_id += 1
     cursor.close()
@@ -207,20 +205,15 @@ def book_tournament_day(conn, prefix, day, show, match_list, tournament_type, fe
 def book_tournament(conn, prefix, tournament_dict, show_list, match_lengths_dict, tournament_type, fed_id, match_uid):
     """
     GUI-driven booking for singles, tag, and trios tournaments.
-    Each day uses one show from show_list.
+    show_list: list of show IDs for each match (not just per day)
     """
-    num_days = len(tournament_dict)
-    if len(show_list) < num_days:
-        raise ValueError("Not enough shows for all tournament days!")
-
-    for day_idx, day in enumerate(sorted(tournament_dict.keys())):
+    match_idx = 0
+    for day in sorted(tournament_dict.keys()):
         matches = tournament_dict[day]
         lengths = match_lengths_dict.get(day, [0]*len(matches))
-        show_id = show_list[day_idx]  # One show per day
-
-        if len(matches) != len(lengths):
-            raise ValueError(f"Day {day} has {len(matches)} matches but {len(lengths)} lengths provided!")
-
-        # Book all matches for this day at once
-        book_tournament_day(conn, prefix, day, show_id, matches, tournament_type, fed_id, lengths, match_uid)
+        shows_for_matches = show_list[match_idx:match_idx+len(matches)]
+        if len(matches) != len(lengths) or len(matches) != len(shows_for_matches):
+            raise ValueError(f"Day {day} has {len(matches)} matches, {len(lengths)} lengths, {len(shows_for_matches)} shows!")
+        book_tournament_day(conn, prefix, day, shows_for_matches, matches, tournament_type, fed_id, lengths, match_uid)
+        match_idx += len(matches)
 
