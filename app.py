@@ -106,7 +106,7 @@ class MDBApp(tk.Tk):
 
         # File picker
         self.path_entry = LabeledEntry(control_frame, "MDB File:")
-        self.path_entry.set("D:/TEW 2024/Databases/2018-RINGKAMPF/SaveGames/RK18_0/temp/TEW9Save.mdb")
+        self.path_entry.set("")
         self.path_entry.pack(fill=tk.X, expand=True, side=tk.LEFT)
         self.browse_btn = ttk.Button(control_frame, text="Browse", command=self.load_file)
         self.browse_btn.pack(side=tk.LEFT, padx=5)
