@@ -1,4 +1,4 @@
-# SWalkers-TEW-IX-Pal
+# SWalkers-TEW-IX-Pal Rework
 
 A graphical tool for editing and managing TEW IX save files (MDB/ACCDB), including tournament, dojo, and alliance management. Designed for use with the Microsoft Access Database Engine and compatible with both Python and standalone EXE.
 
