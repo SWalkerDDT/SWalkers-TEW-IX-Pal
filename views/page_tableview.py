@@ -21,34 +21,36 @@ class TableViewPage(BaseTabFrame):
         self.select_btn.pack(pady=5)
 
         self.tree = None
-        if self.db_connection is not None:
-            self.populate_table_dropdown()
+        # Always try to populate dropdown on init
+        self.populate_table_dropdown()
 
     def set_db_connection(self, db):
         super().set_db_connection(db)
         self.populate_table_dropdown()
 
     def populate_table_dropdown(self):
-        if self.db_connection is None:
+        # Try to get tables from cached connection if available
+        if self.db_connection is not None and hasattr(self.db_connection, 'conn_cached') and self.db_connection.conn_cached is not None:
+            tables = get_table_names(self.db_connection.conn_cached)
+            self.table_dropdown['values'] = tables
+            if tables:
+                self.table_var.set(tables[0])
+        else:
             self.table_dropdown['values'] = []
-            return
-        tables = get_table_names(self.db_connection)
-        self.table_dropdown['values'] = tables
-        if tables:
-            self.table_var.set(tables[0])
+            self.table_var.set('')
 
     def show_selected_table(self):
         if self.tree:
             self.tree.destroy()
-        if self.db_connection is None:
+        if self.db_connection is None or not hasattr(self.db_connection, 'conn_cached') or not hasattr(self.db_connection, 'conn_original'):
             tk.messagebox.showerror("Error", "No database connection.")
             return
         table = self.table_var.get()
         if not table:
             tk.messagebox.showerror("Error", "No table selected.")
             return
-        columns = get_column_names(self.db_connection, table)
-        rows = select(self.db_connection, table, columns=columns)
+        columns = get_column_names(self.db_connection.conn_cached, table)
+        rows = select(self.db_connection.conn_cached, table, columns=columns)
         self.tree = ExtendedTreeview(
             self,
             columns=columns,
@@ -56,7 +58,7 @@ class TableViewPage(BaseTabFrame):
             editable=True,
             draggable=True,
             searchbar=True,
-            db=self.db_connection,
+            db=self.db_connection.conn_original,  # Use original for updates
             table=table,
             primary_key=columns[0] if columns else None
         )

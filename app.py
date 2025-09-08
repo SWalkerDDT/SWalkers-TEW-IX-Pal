@@ -2,9 +2,13 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 from models.database import Database
 
-from views.home_page import HomePage
-from views.settings_page import SettingsPage
-from views.tableview_page import TableViewPage
+from views.page_home import HomePage
+from views.page_settings import SettingsPage
+from views.page_tableview import TableViewPage
+from views.page_alliance import AllianceManagerPage
+from views.page_dojo import DojoManagerPage
+from views.page_roundrobin import RoundRobinPage
+from views.page_prebooking import PreBookingPage
 
 from components.database_connection_bar import DatabaseConnectionBar
 
@@ -21,7 +25,7 @@ class MainApp(tk.Tk):
         self.notebook.pack(fill="both", expand=True)
 
         self.frames = {}
-        for F in (HomePage, SettingsPage, TableViewPage):
+        for F in (HomePage, SettingsPage, TableViewPage, AllianceManagerPage, DojoManagerPage, RoundRobinPage, PreBookingPage):
             page_name = F.__name__
             frame = F(parent=self.notebook, controller=self)
             self.frames[page_name] = frame
